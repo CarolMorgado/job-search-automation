@@ -1,0 +1,245 @@
+{
+  "name": "Job Search: 8 Morning Briefing",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -192,
+        0
+      ],
+      "id": "03c93206-6ca0-459d-8d81-dc232554d5cf",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_EMAIL@example.com",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1088,
+        0
+      ],
+      "id": "8d448633-12ee-4e70-9da5-637702e97657",
+      "name": "Send a message"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_OUTREACH_LOG_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Outreach Log"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        640,
+        0
+      ],
+      "id": "e42ef55d-2800-48ae-bcc5-e047273b1980",
+      "name": "Get Outreach",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_CONTACTS_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Contacts"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        448,
+        0
+      ],
+      "id": "12e9b297-d33c-4cdb-bbab-acf5551ef5c9",
+      "name": "Get Contacts",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_COMPANIES_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Companies"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        224,
+        0
+      ],
+      "id": "a9a29172-9a51-4148-ac3a-92e463f662b2",
+      "name": "Get Companies",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_JOBS_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Jobs"
+        },
+        "returnAll": true,
+        "simple": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        16,
+        0
+      ],
+      "id": "0532a533-d710-4e3d-b1e1-86d57984c316",
+      "name": "Get Jobs",
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -192,
+        192
+      ],
+      "id": "950a16ed-3d3e-4fdc-88e3-6e8b3760a94e",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = $('Get Jobs').all().map(i => i.json).filter(j => j.id);\nconst companies = $('Get Companies').all().map(i => i.json).filter(c => c.id);\nconst contacts = $('Get Contacts').all().map(i => i.json).filter(c => c.id);\nconst outreach = $('Get Outreach').all().map(i => i.json).filter(o => o.id);\n\nconst norm = s => String(s).toLowerCase().replace(/[^a-z]/g, '').replace(/^property/, '');\n\n// Reads one Notion property value, raw API format or simplified format\nconst val = p => {\n  if (p == null) return '';\n  if (typeof p !== 'object') return p;\n  if (Array.isArray(p)) return p;\n  switch (p.type) {\n    case 'title': return (p.title || []).map(t => t.plain_text || '').join('');\n    case 'rich_text': return (p.rich_text || []).map(t => t.plain_text || '').join('');\n    case 'select': return p.select ? p.select.name : '';\n    case 'status': return p.status ? p.status.name : '';\n    case 'multi_select': return (p.multi_select || []).map(s => s.name);\n    case 'date': return p.date ? p.date.start : '';\n    case 'number': return p.number == null ? '' : p.number;\n    case 'checkbox': return !!p.checkbox;\n    case 'url': return p.url || '';\n    case 'relation': return (p.relation || []).map(r => r.id);\n    case 'formula': return p.formula ? (p.formula.string ?? p.formula.number ?? p.formula.boolean ?? '') : '';\n    case 'rollup': return p.rollup ? (p.rollup.number ?? '') : '';\n    default: return p.name || p.start || '';\n  }\n};\n\n// Finds a property by name in either format\nconst get = (j, name) => {\n  const want = norm(name);\n  const props = (j.properties && typeof j.properties === 'object') ? j.properties : j;\n  const k = Object.keys(props).find(k => norm(k) === want);\n  return k ? val(props[k]) : '';\n};\n\n// The page title, whatever the title column is called\nconst titleOf = j => {\n  if (j.name && typeof j.name === 'string') return j.name;\n  const props = j.properties || {};\n  const k = Object.keys(props).find(k => props[k] && props[k].type === 'title');\n  return k ? val(props[k]) : '';\n};\n\nconst coName = {}; companies.forEach(c => { coName[c.id] = titleOf(c); });\nconst ctName = {}; contacts.forEach(c => { ctName[c.id] = titleOf(c); });\n\nconst esc = s => String(s == null ? '' : s)\n  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst timeOf = j => {\n  const s = get(j, 'date found');\n  const t = s ? new Date(s).getTime() : 0;\n  return isNaN(t) ? 0 : t;\n};\n\nconst now = Date.now();\nconst WINDOW = 20 * 3600 * 1000; // \"new\" = found in the last 20 hours (this morning's run)\n\nconst company = j => {\n  const c = get(j, 'company');\n  return (Array.isArray(c) && c[0]) ? (coName[c[0]] || '') : '';\n};\nconst verdict = j => String(get(j, 'claude verdict') || '');\nconst decision = j => String(get(j, 'decision') || '');\nconst undecided = j => !decision(j) || decision(j) === 'Undecided';\nconst preScore = j => { const v = get(j, 'pre score'); return v === '' ? '-' : v; };\nconst nContacts = j => { const c = get(j, 'contacts'); return Array.isArray(c) ? c.length : 0; };\nconst rank = v => v === 'Apply' ? 0 : v === 'Reach out first' ? 1 : v === '' ? 2 : 3;\n\nconst jobLine = j =>\n  '<li><a href=\"' + esc(j.url) + '\">' + esc(titleOf(j)) + '</a>, ' + esc(company(j)) +\n  ' · score ' + esc(preScore(j)) +\n  ' · <b>' + esc(verdict(j) || 'not analyzed yet') + '</b>' +\n  (nContacts(j) ? ' · ' + nContacts(j) + ' contact(s)' : '') +\n  '</li>';\n\nconst section = (title, arr, fn, max) => {\n  const items = arr.slice(0, max || 15);\n  const more = arr.length > items.length ? '<p>+ ' + (arr.length - items.length) + ' more in Notion</p>' : '';\n  return '<h3>' + title + ' (' + arr.length + ')</h3>' +\n    (items.length ? '<ul>' + items.map(fn).join('') + '</ul>' + more : '<p>Nothing right now.</p>');\n};\n\n// 1. New jobs: found in the last 20 hours, not decided yet, not auto-skipped\nconst newJobs = jobs.filter(j => now - timeOf(j) <= WINDOW && timeOf(j) > 0 && verdict(j) !== 'Skip' && undecided(j))\n  .sort((a, b) => rank(verdict(a)) - rank(verdict(b)));\n\n// 2. Jobs waiting for your decision (analyzed by Claude, not decided yet, not \"Skip\")\nconst toDecide = jobs.filter(j => verdict(j) && verdict(j) !== 'Skip' && undecided(j))\n  .sort((a, b) => rank(verdict(a)) - rank(verdict(b)));\n\n// 3. Outreach drafts waiting to be sent\nconst drafts = outreach.filter(o => String(get(o, 'status')) === 'Draft');\nconst draftLine = o => {\n  const c = get(o, 'contact');\n  const id = Array.isArray(c) ? c[0] : null;\n  return '<li><a href=\"' + esc(o.url) + '\">' + esc(titleOf(o)) + '</a>' + (id && ctName[id] ? ' · ' + esc(ctName[id]) : '') + '</li>';\n};\n\n// 4. Will Apply but no materials yet\nconst needMaterials = jobs.filter(j => decision(j) === 'Will Apply' && !get(j, 'materials ready'));\n\nconst html =\n  '<div style=\"font-family:Arial,sans-serif;font-size:14px;line-height:1.5\">' +\n  '<h2>Job search briefing</h2>' +\n  section('New jobs today', newJobs, jobLine, 15) +\n  section('Waiting for your decision', toDecide, jobLine, 10) +\n  section('Outreach drafts to review and send', drafts, draftLine, 10) +\n  section('Will Apply, materials not ready', needMaterials, jobLine, 10) +\n  '<p style=\"color:#888;font-size:12px\">debug: jobs=' + jobs.length +\n  ', with date=' + jobs.filter(j => timeOf(j) > 0).length +\n  ', new=' + newJobs.length +\n  ', outreach=' + outreach.length + '</p>' +\n  '</div>';\n\nconst today = new Date().toISOString().slice(0, 10);\nconst subject = 'Job briefing ' + today + ': ' + newJobs.length + ' new, ' + toDecide.length + ' to decide, ' + drafts.length + ' drafts';\n\nreturn [{ json: { subject, html } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        0
+      ],
+      "id": "c86e69d1-9635-48b3-8d0b-0bbcd6c8d0d8",
+      "name": "Build Briefing"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Outreach": {
+      "main": [
+        [
+          {
+            "node": "Build Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Contacts": {
+      "main": [
+        [
+          {
+            "node": "Get Outreach",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Companies": {
+      "main": [
+        [
+          {
+            "node": "Get Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Jobs": {
+      "main": [
+        [
+          {
+            "node": "Get Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Briefing": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "any",
+    "availableInMCP": false
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

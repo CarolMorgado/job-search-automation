@@ -1,0 +1,172 @@
+{
+  "name": "Job Search: 3 Score Jobs",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "11cdabd0-cb93-4fc0-a5bb-3969294f673a",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_JOBS_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Jobs"
+        },
+        "returnAll": true,
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Pre-Score|number",
+              "condition": "is_empty"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        224,
+        0
+      ],
+      "id": "50e1b3df-7f07-40cf-9637-e9323d62c716",
+      "name": "Get Unscored Jobs",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const TITLE_STRONG = ['business analyst','project coordinator','pmo','project assistant','projektkoordinator','projektassistent','project manager','projektmanager'];\nconst SKILLS = ['sql','jira','agile','scrum','kanban','excel','requirements','anforderung','stakeholder','user stor','uat','power bi','tableau','python','prozess','process','ifrs','sprint','test'];\nconst FLUENT = ['fluent german','fließend','verhandlungssicher','sehr gute deutschkenntnisse','deutsch c1','deutsch c2','german c1','german (c1','muttersprach'];\nconst DE_MARKERS = [' und ',' die ',' der ',' wir ',' du ',' sie ','aufgaben','erfahrung','kenntnisse'];\n\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  if (!j.id) continue;                       // empty placeholder\n  if (j.property_pre_score !== null && j.property_pre_score !== undefined) continue; // already scored\n\n  const title = String(j.name || '').toLowerCase();\n  const desc = String(j.property_raw_job_description || '').toLowerCase();\n  const loc = String(j.property_location || '').toLowerCase();\n  const text = title + ' ' + desc;\n\n  // 1. Title (30)\n  let t = 0;\n  if (TITLE_STRONG.some(k => title.includes(k))) t = 30;\n  else if (/analyst|project|projekt|pmo/.test(title)) t = 20;\n\n  // 2. Skills (25): 6 matches = full points\n  const matched = SKILLS.filter(k => text.includes(k));\n  const s = Math.min(25, Math.round(25 * matched.length / 6));\n\n  // 3. Location / remote (15)\n  let l = 0;\n  if (/remote/.test(text)) l = 15;\n  else if (loc.includes('berlin')) l = 12;\n  else if (/hybrid|home ?office|mobiles arbeiten/.test(text)) l = 8;\n\n  // 4. Contact (15)\n  const c = (j.property_contacts || []).length > 0 ? 15 : 0;\n\n  // 5. German (10)\n  let german = 'None', g = 10;\n  if (FLUENT.some(k => text.includes(k))) { german = 'Fluent'; g = 0; }\n  else if (DE_MARKERS.filter(k => text.includes(k)).length >= 3) { german = 'Basic'; g = 5; }\n\n  // 6. Seniority (5)\n  let r = 3;\n  if (/senior|lead|head|principal|leiter/.test(title)) r = -15;\n  else if (/junior|entry|trainee|werkstudent|associate/.test(title)) r = 5;\n\n  const total = t + s + l + c + g + r;\n  out.push({ json: {\n    job_id: j.id,\n    pre_score: total,\n    breakdown: `Title ${t}, Skills ${s}, Location ${l}, Contact ${c}, German ${g} (${german}), Seniority ${r}`,\n    matched_skills: matched.join(', '),\n    german_required: german\n  }});\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "e26561fd-48f5-4961-9837-899c49b85347",
+      "name": "Score Jobs"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $json.job_id }}",
+          "mode": "id"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Pre-Score|number",
+              "numberValue": "={{ $json.pre_score }}"
+            },
+            {
+              "key": "Score Breakdown|rich_text",
+              "textContent": "={{ $json.breakdown }}"
+            },
+            {
+              "key": "Matched Skills|rich_text",
+              "textContent": "={{ $json.matched_skills }}"
+            },
+            {
+              "key": "German Required|select",
+              "selectValue": "={{ $json.german_required }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        672,
+        0
+      ],
+      "id": "03c422bf-ffc5-45e3-999b-01b75b2f5867",
+      "name": "Save Scores"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        16,
+        192
+      ],
+      "id": "f6003cb5-cc0d-47b7-a1e6-6ad96e75b528",
+      "name": "When Executed by Another Workflow"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Unscored Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Unscored Jobs": {
+      "main": [
+        [
+          {
+            "node": "Score Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Jobs": {
+      "main": [
+        [
+          {
+            "node": "Save Scores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get Unscored Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "any",
+    "availableInMCP": false
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

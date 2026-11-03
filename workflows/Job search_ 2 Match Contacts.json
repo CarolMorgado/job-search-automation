@@ -1,0 +1,237 @@
+{
+  "name": "Job search: 2 Match Contacts",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "fb885945-4b8c-47b1-a7c2-337ad62359e5",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_JOBS_DATABASE_ID",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        224,
+        0
+      ],
+      "id": "6e9aa5ea-105b-44b1-aa61-18799b3b9c72",
+      "name": "Get Jobs",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_CONTACTS_DATABASE_ID",
+          "__regex": "^([0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12})"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        448,
+        0
+      ],
+      "id": "d3abfaee-194d-417c-810f-dfa171d68ad6",
+      "name": "Get Contacts",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const MAX_PER_JOB = 10; // maximum contacts linked to one job\n\nconst jobs = $('Get Jobs').all().map(i => i.json).filter(j => j.id);\nconst contacts = $('Get Contacts').all().map(i => i.json).filter(c => c.id);\n\n// Contacts with these roles are listed first, because they can help most\nconst PRIORITY = /recruit|talent|hiring|hr |human resources|people|project|programme|program|pmo|business analyst|product|head|director|manager/i;\n\n// Map: company page id -> contacts who work there\nconst byCompany = {};\nfor (const c of contacts) {\n  const cos = Array.isArray(c.property_companies) ? c.property_companies : [];\n  for (const id of cos) {\n    (byCompany[id] = byCompany[id] || []).push(c);\n  }\n}\n\nconst out = [];\nfor (const j of jobs) {\n  const cos = Array.isArray(j.property_company) ? j.property_company : [];\n  let matches = [];\n  for (const id of cos) matches = matches.concat(byCompany[id] || []);\n  if (!matches.length) continue;\n\n  matches.sort((a, b) => {\n    const pa = PRIORITY.test(a.property_position || '') ? 0 : 1;\n    const pb = PRIORITY.test(b.property_position || '') ? 0 : 1;\n    return pa - pb;\n  });\n\n  const ids = [...new Set(matches.map(m => m.id))].slice(0, MAX_PER_JOB);\n\n  // Skip jobs that already have exactly these contacts\n  const current = Array.isArray(j.property_contacts) ? j.property_contacts : [];\n  if (current.length === ids.length && ids.every(x => current.includes(x))) continue;\n\n  out.push({ json: { job_id: j.id, contact_ids: ids, contact_count: matches.length } });\n}\n\n// Debug: only appears when there is nothing to link\nif (!out.length) {\n  return [{ json: {\n    debug: true,\n    note: 'No job needs linking. Do not run Link Contacts to Job with this item.',\n    jobs: jobs.length,\n    contacts: contacts.length,\n    contacts_with_company: contacts.filter(c => Array.isArray(c.property_companies) && c.property_companies.length).length,\n    jobs_with_company: jobs.filter(j => Array.isArray(j.property_company) && j.property_company.length).length,\n    contact_fields: Object.keys(contacts[0] || {}),\n    job_fields: Object.keys(jobs[0] || {})\n  } }];\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "3a47ddae-38ee-4bfb-b1ec-b9633c970187",
+      "name": "Match Contacts to Jobs"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.notion.com/v1/pages/{{ $json.job_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "\tNotion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ properties: { \"Contacts\": { relation: $json.contact_ids.map(id => ({ id: id })) } } }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "d1469b79-d3cd-486b-bf9e-9f278e1eeebb",
+      "name": "Link Contacts to Job1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "8e9f055a-18dd-4d82-85bb-7b7cf0840502",
+              "leftValue": "={{ $json.job_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        896,
+        0
+      ],
+      "id": "0b7b85e6-618c-4f43-8a95-c0faea96dca8",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        208
+      ],
+      "id": "2f67f505-66bf-4732-ad49-4e9aed9355cc",
+      "name": "When Executed by Another Workflow"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Jobs": {
+      "main": [
+        [
+          {
+            "node": "Get Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Contacts": {
+      "main": [
+        [
+          {
+            "node": "Match Contacts to Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match Contacts to Jobs": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Link Contacts to Job1": {
+      "main": [
+        []
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Link Contacts to Job1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "any",
+    "availableInMCP": false
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

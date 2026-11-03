@@ -1,0 +1,661 @@
+{
+  "name": "Job Search: 7 LinkedIn Alerts",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// URLs already saved in Notion (finds the Job URL column whatever n8n calls it)\nconst existing = new Set();\nfor (const item of $input.all()) {\n  const j = item.json;\n  for (const key of Object.keys(j)) {\n    if (key.toLowerCase().replace(/[^a-z]/g, '').includes('joburl') && j[key]) {\n      existing.add(String(j[key]).trim());\n    }\n  }\n}\n\n// Jobs that passed the filter and have a real description (output 0 = true branch of Real description?)\nconst jobs = $('Real description?').all(0);\n\nconst seen = new Set();\nconst fresh = [];\nfor (const item of jobs) {\n  const url = (item.json.url || '').trim();\n  if (!url || existing.has(url) || seen.has(url)) continue;\n  seen.add(url);\n  fresh.push({ json: item.json });\n}\nreturn fresh;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        240
+      ],
+      "id": "ae1a5da4-6fee-4f62-a5c8-9992f1b352f3",
+      "name": "Find New Jobs"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_JOBS_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "YOUR_JOBS_DATABASE_ID"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        1136,
+        240
+      ],
+      "id": "cfeae027-2af8-4f9d-b931-c3cab36addf4",
+      "name": "Get Existing Jobs",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_COMPANIES_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Companies"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        1584,
+        240
+      ],
+      "id": "697c5f62-9a61-4d86-a9d9-6e6c6eb0c103",
+      "name": "Get Existing Companies",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const norm = s => String(s || '').trim().toLowerCase();\n\n// Companies already in Notion\nconst existing = new Set();\nfor (const item of $input.all()) {\n  const j = item.json;\n  for (const key of Object.keys(j)) {\n    if (key.toLowerCase().includes('name') && j[key]) existing.add(norm(j[key]));\n  }\n}\n\n// Companies in today's new jobs\nconst jobs = $('Find New Jobs').all();\nconst missing = new Map();\nfor (const item of jobs) {\n  const name = String(item.json.company || '').trim();\n  const k = norm(name);\n  if (name && !existing.has(k) && !missing.has(k)) missing.set(k, name);\n}\n\n// Always return something, so the workflow keeps going\nif (missing.size === 0) return [{ json: { name: '', skip: true } }];\nreturn [...missing.values()].map(name => ({ json: { name, skip: false } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1808,
+        240
+      ],
+      "id": "687a48af-3f0e-431b-98d2-a6ffe63ec822",
+      "name": "Find Missing Companies"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "6e4acacc-0ed2-4539-8370-9c02eba980eb",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        2032,
+        240
+      ],
+      "id": "2971fad5-97da-4190-9165-269af5d1c236",
+      "name": "Needs Creating?"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_COMPANIES_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Companies"
+        },
+        "title": "={{ $json.name }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        2224,
+        224
+      ],
+      "id": "89188cf7-2b55-49e1-98e3-c5a88dd3a2a8",
+      "name": "Create Missing Companies"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_COMPANIES_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Companies"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        2448,
+        224
+      ],
+      "id": "d8addd06-7206-4bde-9370-70768d68d72f",
+      "name": "Get All Companies",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const norm = s => String(s || '').trim().toLowerCase();\n\n// company name -> Notion page id\nconst map = new Map();\nfor (const item of $input.all()) {\n  const j = item.json;\n  const nameKey = Object.keys(j).find(k => k.toLowerCase().includes('name'));\n  if (nameKey && j[nameKey] && j.id) map.set(norm(j[nameKey]), j.id);\n}\n\n// today's new jobs, each with its company page id, one per URL\nconst seen = new Set();\nconst out = [];\nfor (const item of $('Find New Jobs').all()) {\n  const url = String(item.json.url || '').trim();\n  if (!url || seen.has(url)) continue;\n  seen.add(url);\n  out.push({ json: { ...item.json, company_id: map.get(norm(item.json.company)) || null } });\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2672,
+        224
+      ],
+      "id": "a71dd41d-4bab-4b9d-b527-0bee03b762dc",
+      "name": "Attach Company IDs"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_JOBS_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Jobs"
+        },
+        "title": "={{ $json.title }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Job URL|url",
+              "urlValue": "={{ $json.url }}"
+            },
+            {
+              "key": "Location|rich_text",
+              "textContent": "={{ $json.location }}"
+            },
+            {
+              "key": "Raw Job Description|rich_text",
+              "textContent": "={{ $json.description }}"
+            },
+            {
+              "key": "Date Found|date",
+              "date": "=\t{{ $now.toISO() }}"
+            },
+            {
+              "key": "Source|select",
+              "selectValue": "LinkedIn alert"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "New"
+            },
+            {
+              "key": "Company|relation",
+              "relationValue": [
+                "={{ $json.company_id }}"
+              ]
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        2896,
+        224
+      ],
+      "id": "7b67ba17-a4aa-4456-8166-78a5d6998b7a",
+      "name": "Create Job in Notion"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        224
+      ],
+      "id": "e7934d73-dee4-4b36-804a-f37b81050b99",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "const TITLE_STRONG = ['business analyst', 'it business analyst', 'junior business analyst', 'project coordinator', 'pmo', 'project assistant', 'project support', 'functional analyst', 'test analyst', 'junior project manager'];\nconst TITLE_WEAK = ['analyst', 'coordinator', 'project', 'assistant', 'business'];\nconst SKILLS = ['sql', 'jira', 'confluence', 'uat', 'user acceptance', 'requirements', 'stakeholder', 'process', 'excel', 'power bi', 'agile', 'scrum', 'documentation', 'reporting', 'erp', 'sap', 'test', 'data analysis', 'project management', 'user stories', 'workshop', 'compliance', 'finance', 'ifrs'];\nconst GERMAN_NEEDED = ['german required', 'fluent german', 'fluency in german', 'german language', 'native german', 'german c1', 'german (c1', 'german is a must', 'proficiency in german', 'good command of german', 'deutschkenntnisse', 'german speaking'];\nconst US_AUTH = ['authorized to work in the u', 'authorised to work in the u', 'legally authorized to work', 'eligible to work in the u', 'work authorization', 'work authorisation', 'no sponsorship', 'without sponsorship', 'not provide sponsorship', 'u.s. citizen', 'us citizen', 'security clearance'];\n\nconst MIN_TRASH_SCORE = 30; // below this a dropped job is not worth keeping in Trash\nconst MAX_TRASH = 20;       // at most this many dropped jobs go to Trash per run\n\nconst passed = [];\nconst dropped = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  const title = String(j.title || '').toLowerCase();\n  const desc = String(j.description || '').toLowerCase();\n  const loc = String(j.location || '').toLowerCase();\n\n  // Hard exclusion: US work authorization phrases (discarded, not saved)\n  if (US_AUTH.some(p => desc.includes(p))) continue;\n\n  // Location rule: Berlin = any type, everywhere else = remote only\n  const isBerlin = loc.includes('berlin');\n  // The alerts are already filtered by LinkedIn. Drop only what clearly says hybrid or on-site outside Berlin (discarded, not saved).\n  if (!isBerlin && /hybrid|on-site|onsite|vor ort/.test(loc)) continue;\n\n  let score = 0;\n\n  // Title (30)\n  if (TITLE_STRONG.some(k => title.includes(k))) score += 30;\n  else if (TITLE_WEAK.some(k => title.includes(k))) score += 15;\n\n  // Skills (25): 5 points per match\n  score += Math.min(25, SKILLS.filter(k => desc.includes(k)).length * 5);\n\n  // Location (15): every job that reaches this point is Berlin or remote\n  score += 15;\n\n  // German not required (10)\n  if (!GERMAN_NEEDED.some(k => desc.includes(k))) score += 10;\n\n  // Seniority (5, or -15 for senior)\n  const senior = ['senior', 'staff', 'c_level'].includes(String(j.seniority || '').toLowerCase()) || /senior|principal|head of|director|lead\\b/.test(title);\n  score += senior ? -15 : 5;\n\n  // Contact points (15) are added later in Workflow 3\n  if (score > 50) passed.push({ json: { ...j, quick_score: score, drop_reason: '' } });\n  else if (score >= MIN_TRASH_SCORE) dropped.push({ json: { ...j, quick_score: score, drop_reason: 'Low pre-score' } });\n}\n\ndropped.sort((a, b) => b.json.quick_score - a.json.quick_score);\nreturn [...passed, ...dropped.slice(0, MAX_TRASH)];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        224
+      ],
+      "id": "ad616a07-b0d2-4348-85b5-66bed0c37e60",
+      "name": "Pre-Score Filter"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 20,
+        "simple": false,
+        "filters": {
+          "q": "(from:jobalerts-noreply@linkedin.com OR from:YOUR_FORWARDING_ADDRESS@example.com) newer_than:3d"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        176,
+        224
+      ],
+      "id": "b1ba3309-00cc-4a9b-a0c3-ebde0a9f6293",
+      "name": "Get Alert Emails",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const decode = s => String(s)\n  .replace(/&amp;/g, '&')\n  .replace(/&nbsp;/g, ' ')\n  .replace(/&#39;/g, \"'\")\n  .replace(/&quot;/g, '\"')\n  .replace(/&middot;/g, '·');\n\nconst clean = s => decode(s).replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim();\n\nconst seen = new Set();\nconst out = [];\n\nfor (const item of $input.all()) {\n  const html = String(item.json.html || item.json.textAsHtml || item.json.text || '');\n  if (!html) continue;\n\n  const re = /<a[^>]+href=\"([^\"]+)\"[^>]*>([\\s\\S]*?)<\\/a>/gi;\n  let m;\n  while ((m = re.exec(html)) !== null) {\n    let href = m[1].replace(/&amp;/g, '&');\n    try { href = decodeURIComponent(href); } catch (e) {}\n    const idm = href.match(/\\/jobs\\/view\\/(\\d+)/);\n    if (!idm) continue;\n\n    const id = idm[1];\n    const title = clean(m[2]);\n    if (seen.has(id) || title.length < 4 || /^(view job|see job|apply|easy apply)/i.test(title)) continue;\n    seen.add(id);\n\n    // Text after the title: first line = \"Company · Location\"\n    const after = html.slice(m.index + m[0].length, m.index + m[0].length + 1500).replace(/<[^>]*$/, '');\n    const lines = after.replace(/<[^>]*>/g, '\\n').split('\\n')\n      .map(l => clean(l))\n      .filter(l => l\n        && !/^(view job|see job|apply|easy apply)/i.test(l)\n        && !/connection|alumni|actively recruiting|promoted|be an early applicant/i.test(l)\n        && !/[<>=]/.test(l));\n\n    const first = lines[0] || '';\n    let company, location;\n    if (first.includes('·')) {\n      const parts = first.split('·').map(s => s.trim());\n      company = parts[0];\n      location = parts.slice(1).join(', ');\n    } else {\n      company = first;\n      location = lines[1] || '';\n    }\n\n    // Work type from the location text\n    const locText = String(location || '').toLowerCase();\n    let work_type = 'Unknown';\n    if (/remote|home office|homeoffice/.test(locText)) work_type = 'Remote';\n    else if (/hybrid/.test(locText)) work_type = 'Hybrid';\n    else if (/on-?site|vor ort/.test(locText)) work_type = 'On-site';\n\n    out.push({ json: {\n      job_id: 'li-' + id,\n      title,\n      company,\n      company_domain: '',\n      url: 'https://www.linkedin.com/jobs/view/' + id + '/',\n      location,\n      remote: /remote/i.test(location),\n      hybrid: /hybrid/i.test(location),\n      work_type,\n      seniority: '',\n      date_posted: new Date().toISOString().slice(0, 10),\n      description: 'Imported from a LinkedIn job alert. Open the link and paste the full job description here.'\n    } });\n  }\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        224
+      ],
+      "id": "5d811c77-e151-424b-b46d-5efa35d35abe",
+      "name": "Parse Alert Emails"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -32,
+        464
+      ],
+      "id": "9f7199d8-dbe3-4abb-a66d-1c0dfacc77ac",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "e35d8dc3-f4f9-42d4-b647-782278e2a271",
+              "leftValue": "={{ (() => { const d = String($json.description || $json.raw_job_description || $json.job_description || '').trim(); return d.length > 0 && !/Imported from a LinkedIn/i.test(d); })() }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        864,
+        224
+      ],
+      "id": "b1a951a6-b256-487d-8444-c9a8b755554b",
+      "name": "Real description?",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_TRASH_JOBS_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Trash Jobs"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        1120,
+        528
+      ],
+      "id": "f02ae327-d543-4207-bf35-218d6eacda9e",
+      "name": "Get Trash Rows",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_JOBS_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "YOUR_JOBS_DATABASE_ID"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        1344,
+        528
+      ],
+      "id": "42d3bb73-22fd-47c8-84be-d396e6189d73",
+      "name": "Get Existing Jobs1",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $('Real description?').all(1).map(i => i.json); // output 1 = the false branch\n\nconst norm = (u) => String(u || '').split('?')[0].replace(/\\/+$/, '').toLowerCase();\n\n// Jobs that already exist in Trash or in Jobs are never created again\nconst known = new Set();\nfor (const r of $('Get Trash Rows').all()) { const u = norm(r.json.property_url); if (u) known.add(u); }\nfor (const r of $('Get Existing Jobs1').all()) { const u = norm(r.json.property_job_url); if (u) known.add(u); }\n\nconst workType = (w) => {\n  const s = String(w || '').toLowerCase();\n  if (s.includes('remote')) return 'Remote';\n  if (s.includes('hybrid')) return 'Hybrid';\n  if (s.includes('site') || s.includes('office')) return 'On-site';\n  return '';\n};\n\nconst out = [];\nfor (const j of items) {\n  const url = j.url || '';\n  const key = norm(url);\n  if (!key || known.has(key)) continue;\n  known.add(key);\n\n  const d = String(j.description || '').trim();\n  out.push({ json: {\n    name: j.title || '',\n    company: j.company || '',\n    location: j.location || '',\n    work_type: workType(j.work_type || j.location),\n    url: url,\n    source: 'LinkedIn',\n    reason: j.drop_reason || 'No description',\n    pre_score: j.quick_score == null ? 0 : j.quick_score,\n    description: /Imported from a LinkedIn/i.test(d) ? '' : d.slice(0, 1990)\n  } });\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        528
+      ],
+      "id": "a246b269-bcbb-4e5e-9692-9bb08963e429",
+      "name": "Build Trash Rows"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_TRASH_JOBS_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Trash Jobs"
+        },
+        "title": "={{ $json.name }}\n",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Name|title",
+              "title": "={{ $json.name }}"
+            },
+            {
+              "key": "Location|rich_text",
+              "textContent": "={{ $json.location }}"
+            },
+            {
+              "key": "Work type|select",
+              "selectValue": "={{ $json.work_type }}"
+            },
+            {
+              "key": "URL|url",
+              "urlValue": "={{ $json.url }}"
+            },
+            {
+              "key": "Source|select",
+              "selectValue": "={{ $json.source }}"
+            },
+            {
+              "key": "Reason|select",
+              "selectValue": "={{ $json.reason }}"
+            },
+            {
+              "key": "Pre-Score|number",
+              "numberValue": "={{ $json.pre_score }}"
+            },
+            {
+              "key": "Company|rich_text",
+              "textContent": "={{ $json.company }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        1792,
+        528
+      ],
+      "id": "94bec305-11ec-4b94-88c1-8ebc43e09596",
+      "name": "Create Trash Row"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Get Existing Jobs": {
+      "main": [
+        [
+          {
+            "node": "Find New Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find New Jobs": {
+      "main": [
+        [
+          {
+            "node": "Get Existing Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Existing Companies": {
+      "main": [
+        [
+          {
+            "node": "Find Missing Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Missing Companies": {
+      "main": [
+        [
+          {
+            "node": "Needs Creating?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Creating?": {
+      "main": [
+        [
+          {
+            "node": "Create Missing Companies",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get All Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Missing Companies": {
+      "main": [
+        [
+          {
+            "node": "Get All Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Companies": {
+      "main": [
+        [
+          {
+            "node": "Attach Company IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Company IDs": {
+      "main": [
+        [
+          {
+            "node": "Create Job in Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Alert Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pre-Score Filter": {
+      "main": [
+        [
+          {
+            "node": "Real description?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Alert Emails": {
+      "main": [
+        [
+          {
+            "node": "Parse Alert Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Alert Emails": {
+      "main": [
+        [
+          {
+            "node": "Pre-Score Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get Alert Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Real description?": {
+      "main": [
+        [
+          {
+            "node": "Get Existing Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Trash Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Trash Rows": {
+      "main": [
+        [
+          {
+            "node": "Get Existing Jobs1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Existing Jobs1": {
+      "main": [
+        [
+          {
+            "node": "Build Trash Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Trash Rows": {
+      "main": [
+        [
+          {
+            "node": "Create Trash Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "any",
+    "availableInMCP": false
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

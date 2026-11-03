@@ -1,0 +1,56 @@
+{
+  "name": "Job Search: 9 Error Alert",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "4fbaca40-6d7a-4443-a369-a6fc01560b42",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_EMAIL@example.com",
+        "subject": "=Job search error: {{ $json.workflow.name }}",
+        "message": "=<p><b>Workflow:</b> {{ $json.workflow.name }}</p> <p><b>Failed node:</b> {{ $json.execution.lastNodeExecuted }}</p> <p><b>Error:</b> {{ $json.execution.error.message }}</p> <p><a href=\"{{ $json.execution.url }}\">Open the execution in n8n</a></p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "d057864a-868d-4df6-9e46-326f8ec5286b",
+      "name": "Send Error Email"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Send Error Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

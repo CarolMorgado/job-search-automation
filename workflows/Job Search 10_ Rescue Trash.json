@@ -1,0 +1,220 @@
+{
+  "name": "Job Search 10: Rescue Trash",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 23
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "50296167-b969-43e2-8161-6805d7bcdf8e",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_TRASH_JOBS_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Trash Jobs"
+        },
+        "returnAll": true,
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Rescue|checkbox",
+              "condition": "equals",
+              "checkboxValue": true
+            },
+            {
+              "key": "Rescued|checkbox",
+              "condition": "equals"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        224,
+        0
+      ],
+      "id": "c230df9b-aec4-4ab9-947b-c6bfc89b8db5",
+      "name": "Get Rescue Rows"
+    },
+    {
+      "parameters": {
+        "jsCode": "const val = (j, name) => {\n  const key = 'property_' + name.toLowerCase().replace(/[^a-z0-9]+/g, '_');\n  if (j[key] !== undefined && j[key] !== null) return j[key];\n  const p = j.properties && j.properties[name];\n  if (!p) return '';\n  if (p.title) return p.title.map(t => t.plain_text).join('');\n  if (p.rich_text) return p.rich_text.map(t => t.plain_text).join('');\n  if (p.number !== undefined) return p.number;\n  if (p.url !== undefined) return p.url || '';\n  if (p.select) return p.select.name;\n  return '';\n};\n\nconst out = [];\nfor (const i of $input.all()) {\n  const j = i.json;\n  const description = String(val(j, 'Description') || '').trim();\n\n  // No real description yet (empty, too short, or the LinkedIn placeholder): leave it in Trash\n  if (description.length < 200 || /Imported from a LinkedIn/i.test(description)) continue;\n\n  const original = val(j, 'Source') || 'Unknown';\n  const empRaw = val(j, 'Employees');\n  const employees = (empRaw === '' || empRaw === null || isNaN(Number(empRaw))) ? null : Number(empRaw);\n\n  out.push({ json: {\n    trash_id: j.id,\n    name: val(j, 'Name') || j.name || '',\n    company: val(j, 'Company'),\n    location: val(j, 'Location'),\n    work_type: val(j, 'Work Type'),\n    employees: employees,\n    job_url: val(j, 'URL'),\n    source: 'Rescued from Trash (' + original + ')',\n    pre_score: 100,\n    decision: 'Will Apply',\n    description: description.slice(0, 1990)\n  } });\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "cdeee147-f3e2-48f4-9d0c-dde3b613cd7f",
+      "name": "Build Jobs Rows"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_JOBS_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Jobs"
+        },
+        "title": "={{ $json.name }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Name|title",
+              "title": "={{ $json.name }}"
+            },
+            {
+              "key": "Location|rich_text",
+              "textContent": "={{ $json.location }}"
+            },
+            {
+              "key": "Work type|select",
+              "selectValue": "={{ $json.work_type }}"
+            },
+            {
+              "key": "Employees|number",
+              "numberValue": "={{ $json.employees }}"
+            },
+            {
+              "key": "Job URL|url",
+              "urlValue": "={{ $json.job_url }}"
+            },
+            {
+              "key": "Source|select",
+              "selectValue": "={{ $json.source }}"
+            },
+            {
+              "key": "Pre-Score|number",
+              "numberValue": "={{ $json.pre_score }}"
+            },
+            {
+              "key": "Raw Job Description|rich_text",
+              "textContent": "={{ $json.description }}"
+            },
+            {
+              "key": "Decision|select",
+              "selectValue": "={{ $json.decision }}"
+            },
+            {
+              "key": "Materials Ready|checkbox"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        672,
+        0
+      ],
+      "id": "b45f26c9-abe6-4d44-b104-e4ab433c750e",
+      "name": "Create Job"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $('Build Jobs Rows').all()[$itemIndex].json.trash_id }}",
+          "mode": "id"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "=Rescued|checkbox",
+              "checkboxValue": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        896,
+        0
+      ],
+      "id": "2f3f6c7b-2884-416a-aaab-e09ebb6df4f0",
+      "name": "Update a database page"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Rescue Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Rescue Rows": {
+      "main": [
+        [
+          {
+            "node": "Build Jobs Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Jobs Rows": {
+      "main": [
+        [
+          {
+            "node": "Create Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Job": {
+      "main": [
+        [
+          {
+            "node": "Update a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

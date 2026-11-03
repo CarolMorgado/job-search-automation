@@ -1,0 +1,719 @@
+{
+  "name": "Job Search: 5 Application Materials",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ec635165-9277-41ab-8af6-09d8887a424b",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_JOBS_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Jobs"
+        },
+        "limit": 10,
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Decision|select",
+              "condition": "equals",
+              "optionValue": "Will Apply"
+            },
+            {
+              "key": "Materials Ready|checkbox",
+              "condition": "equals"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        224,
+        0
+      ],
+      "id": "2e730017-569f-4455-9fb5-332bd77d409f",
+      "name": "Get Approved Jobs",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_PROFILE_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Professional Profile"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        448,
+        0
+      ],
+      "id": "16763890-bcf4-4b2d-a9fe-02fdc46c8cc2",
+      "name": "Get Profile",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---------- 1. Jobs (from Get Approved Jobs), one request per job ----------\nconst jobs = $('Get Approved Jobs').all().map(i => i.json).filter(j => j && j.id);\nif (!jobs.length) {\n  return []; // nothing approved yet, so the workflow stops here\n}\n\n// ---------- 2. Profile rows (from Get Profile), de-duplicated by id ----------\nconst get = (p, keys) => {\n  for (const k of keys) {\n    if (p[k] !== undefined && p[k] !== null && String(p[k]).trim() !== '') return String(p[k]);\n  }\n  return '';\n};\n\nconst byId = new Map();\n$input.all().map(i => i.json).filter(p => p.id).forEach(p => byId.set(p.id, p));\nconst profileRows = [...byId.values()];\n\nconst PROFILE = profileRows.map(p => {\n  return [\n    'EXPERIENCE: ' + get(p, ['name', 'property_name']),\n    'Employer: ' + get(p, ['property_employer']),\n    'Role: ' + get(p, ['property_role']),\n    'Dates: ' + get(p, ['property_dates']),\n    'What I did: ' + get(p, ['property_what_i_did']),\n    'Result (X): ' + get(p, ['property_result_x']),\n    'Metric (Y): ' + get(p, ['property_metric_y']),\n    'How (Z): ' + get(p, ['property_how_z']),\n    'Tools: ' + get(p, ['property_tools'])\n  ].join('\\n');\n}).join('\\n\\n---\\n\\n');\n\n// ---------- 3. Instructions for Claude ----------\nconst SYSTEM = `You are an expert CV writer and career coach. You help a candidate apply for Business Analyst, Project Coordinator, PMO and Project Assistant roles.\n\nLANGUAGE\n- Write ALL output in English, even if the job posting is in German or another language.\n\nHARD RULES FOR THE CV\n- Use ONLY facts and numbers that appear in the CANDIDATE PROFILE. Never invent employers, tools, numbers, dates or results.\n- Never change the underlying facts. You may strengthen the wording only.\n- Use job-posting keywords only to describe tasks the candidate really did. Put keywords that do not match real tasks into the cover letter instead (and only if they are true).\n- If a metric is missing (time saved, speed, revenue, scale, accuracy), do not guess. Ask about it in \"questions_for_candidate\".\n- Every bullet uses the Google XYZ format: \"Accomplished [X], as measured by [Y], by doing [Z].\" If no real metric exists for a task, write the bullet as a clear, honest description of what was done and the outcome, without inventing a number.\n\nBULLET COUNT AND STRUCTURE\n- Write 8 to 9 bullets in total, across the three employers: Employer A, Employer B, Employer C.\n- Each employer gets 2 to 4 bullets. Never fewer than 2 per employer.\n- Put the most job-relevant bullets first within each employer.\n- If an employer's experience is closely connected to the job description, use 3 to 4 bullets for it.\n- If an employer's experience is only loosely connected, still write 2 to 3 bullets for it. Include simpler everyday tasks (reporting, coordination, documentation, communication, process work, tools used), described honestly and linked to skills the job asks for.\n- Never invent tasks or results.\n\nPROFESSIONAL SUMMARY\n- Write 3 to 4 sentences in the first person without \"I\" (CV style), tailored to this job.\n- Use only facts from the CANDIDATE PROFILE. Mention the most relevant strengths and one or two real numbers.\n- Do not copy the job posting. Do not use clichés.\n\nCOVER LETTER\n- 230 to 280 words, in English, in 4 or 5 short paragraphs, separated by \\\\n\\\\n.\n- Open with the employer's problem, not with \"I am applying for\".\n- Show how the candidate has solved a similar problem, with one or two real numbers from the profile.\n- Mention relevant keywords that did not fit into the CV bullets, but only if they are true.\n- End with a clear, short invitation to talk. No clichés.\n\nEMPLOYER PROBLEMS\n- Name exactly 3 concrete problems the employer likely needs solved with this hire. Base them on the job description.\n\nINTERVIEW TALKING POINTS\n- Give exactly 3. Each links one employer problem to a real story or result from the profile.\n\nOUTPUT FORMAT\nReturn ONLY a valid JSON object, with no text before or after it, with exactly these keys:\n- \"professional_summary\": a single string, 3 to 4 sentences.\n- \"cv_bullets\": a flat array of plain strings, 8 to 9 items. Each string is one bullet and MUST start with exactly one of these three prefixes: \"Employer A, <role>: \", \"Employer B, <role>: \", or \"Employer C, <role>: \", followed by the bullet text. Group the bullets by employer in this order: Employer A, Employer B, Employer C. Do not use nested objects or sub-lists.\n- \"cover_letter\": a single string.\n- \"employer_problems\": an array of 3 plain strings.\n- \"talking_points\": an array of 3 plain strings.\n- \"questions_for_candidate\": an array of plain strings, with questions about missing metrics or facts.\n\nJSON rules: use double quotes only. Put a comma between items. After a closing ] or } write only a comma or the end of the object. Do not write any other character, such as a parenthesis. Do not use real line breaks inside a string. Use \\\\n instead.`;\n\n// ---------- 4. One request per job ----------\nconst out = [];\nfor (const job of jobs) {\n  const description = String(job.property_raw_job_description || '').slice(0, 5000);\n\n  // Skip LinkedIn jobs whose real description was never pasted in\n  if (!description.trim() || /Imported from a LinkedIn/i.test(description)) continue;\n\n  const user =\n    'JOB TITLE: ' + (job.name || '') + '\\n' +\n    'LOCATION: ' + (job.property_location || '') + '\\n' +\n    'JOB DESCRIPTION:\\n' + description + '\\n\\n' +\n    'CANDIDATE PROFILE:\\n' + PROFILE;\n\n  out.push({\n    json: {\n      job_id: job.id,\n      job_title: job.name || '',\n      body: {\n        model: 'claude-sonnet-5-5',\n        max_tokens: 8000,\n        thinking: { type: 'between_tools' },\n        system: SYSTEM,\n        messages: [{ role: 'user', content: user }]\n      }\n    }\n  });\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "a807fcca-becf-41a8-b021-306099dac0ab",
+      "name": "Build Application Prompt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 3000
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        896,
+        0
+      ],
+      "id": "3fce8274-cae0-4a9d-8ec7-63b92fb46112",
+      "name": "Write Materials",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const src = $('Build Application Prompt').itemMatching($itemIndex).json;\nconst resp = $json;\n\nlet text = '';\nif (Array.isArray(resp.content)) {\n  text = resp.content.filter(b => b.type === 'text').map(b => b.text).join('\\n');\n} else {\n  text = String(resp.text || resp.data || '');\n}\n\nlet parsed = false;\nlet r = {};\ntry {\n  const s = text.indexOf('{');\n  const e = text.lastIndexOf('}');\n  r = JSON.parse(text.slice(s, e + 1));\n  parsed = true;\n} catch (err) {\n  r = {};\n}\n\nconst cut = (s, n = 1990) => String(s || '').slice(0, n);\n\nconst toList = (v) => {\n  if (Array.isArray(v)) return v.map(x => String(x).trim()).filter(Boolean);\n  return String(v || '').split('\\n').map(x => x.trim()).filter(Boolean);\n};\n\nconst clean = (s) => String(s).replace(/^[-•*\\d.)\\s]+/, '').trim();\n\nconst numbered = (v) => toList(v).map((x, i) => (i + 1) + '. ' + clean(x)).join('\\n');\n\nconst bullets = toList(r.cv_bullets || r.bullets);\n\nconst group = (re) => bullets\n  .filter(b => re.test(clean(b)))\n  .map(b => clean(b).replace(/^[^:]{0,80}:\\s*/, ''));\n\nconst employerA = group(/^employer a/i);\nconst employerB = group(/^employer b/i);\nconst employerC = group(/^employer c/i);\n\nconst summaryKey = Object.keys(r).find(k => /summary/i.test(k) && r[k]);\nlet summary = summaryKey ? r[summaryKey] : '';\nif (Array.isArray(summary)) summary = summary.join(' ');\nsummary = String(summary || '').trim();\n\nconst coverLetter = String(r.cover_letter || '').trim();\nconst problems = numbered(r.employer_problems);\nconst points = numbered(r.talking_points);\nconst questions = numbered(r.questions_for_candidate || r.questions);\n\nreturn {\n  json: {\n    job_id: src.job_id,\n    job_title: src.job_title,\n    parsed_ok: parsed,\n    claude_keys: Object.keys(r).join(', '),\n    cv_bullets: cut(bullets.map(clean).join('\\n')),\n    cover_letter: cut(coverLetter),\n    employer_problems: cut(problems),\n    talking_points: cut(points),\n    questions: cut(questions),\n    summary: summary,\n    employer_a_bullets: employerA.join('\\n'),\n    employer_b_bullets: employerB.join('\\n'),\n    employer_c_bullets: employerC.join('\\n'),\n    cover_letter_full: coverLetter,\n    employer_problems_full: problems,\n    talking_points_full: points,\n    questions_full: questions\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        0
+      ],
+      "id": "af5b51b0-eff1-460f-8f18-c514d397c7fc",
+      "name": "Parse Materials"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_APPLICATION_MATERIALS_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Application Materials"
+        },
+        "title": "={{ $json.job_title }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Job|relation",
+              "relationValue": [
+                "={{ $json.job_id }}"
+              ]
+            },
+            {
+              "key": "Created|date",
+              "date": "={{ $now.toISO() }}"
+            },
+            {
+              "key": "Questions for Me|rich_text",
+              "textContent": "={{ $json.questions }}"
+            },
+            {
+              "key": "Employer Problems|rich_text",
+              "textContent": "={{ $json.employer_problems }}"
+            },
+            {
+              "key": "Interview Talking Points|rich_text",
+              "textContent": "={{ $json.talking_points }}"
+            },
+            {
+              "key": "Cover Letter|rich_text",
+              "textContent": "={{ $json.cover_letter }}"
+            },
+            {
+              "key": "CV Bullets|rich_text",
+              "textContent": "={{ $json.cv_bullets }}"
+            },
+            {
+              "key": "Name|title",
+              "title": "={{ $json.job_title }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        1568,
+        0
+      ],
+      "id": "596dee4a-0e8c-4076-a1bb-7ca8ea282c15",
+      "name": "Save Materials"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $('Parse Materials').item.json.job_id }}",
+          "mode": "id"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Materials Ready|checkbox",
+              "checkboxValue": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        1792,
+        0
+      ],
+      "id": "e70f12ee-0b76-4b2c-aa30-bfb9e390bf97",
+      "name": "Mark Materials Ready"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -48,
+        208
+      ],
+      "id": "46365234-f659-4ee7-84b4-fba76a47ec34",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "8ff03321-69b6-49b1-9571-a9ca378ba18b",
+              "leftValue": "={{ !!($json.content && $json.content.length) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "6499aa8c-84c5-48a1-a983-997189c0c24c",
+      "name": "Claude answered?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $('Parse Materials').all();\nconst jobs = $('Get Approved Jobs').all().map(i => i.json);\nconst byId = {};\njobs.forEach(j => { if (j.id) byId[j.id] = j; });\nconst today = $now.toFormat('dd-MM-yyyy');\n\nconst out = [];\nfor (const item of items) {\n  const r = item.json;\n  const title = r.job_title || 'Job';\n  const j = byId[r.job_id] || {};\n\n  const notes =\n    'JOB IDENTIFICATION\\n' +\n    'Job: ' + title + '\\n' +\n    'Location: ' + String(j.property_location || '') + '\\n' +\n    'Job posting: ' + String(j.property_job_url || j.property_url || '') + '\\n' +\n    'Notion page: ' + String(j.url || '') + '\\n' +\n    'Source: ' + String(j.property_source || '') + '\\n' +\n    'Pre-score: ' + String(j.property_pre_score == null ? '' : j.property_pre_score) + '\\n' +\n    'Claude verdict: ' + String(j.property_claude_verdict || '') + '\\n' +\n    'Materials created: ' + today + '\\n\\n' +\n\n    'INTERVIEW PREPARATION\\n\\n' +\n    'What the employer likely needs\\n' + String(r.employer_problems_full || '') + '\\n\\n' +\n    'Your talking points\\n' + String(r.talking_points_full || '') + '\\n\\n' +\n    'Questions to answer before sending\\n' + String(r.questions_full || '') + '\\n';\n\n  out.push({ json: {\n    job_title: title,\n    cv_title: ('CV - ' + title + ' - ' + today).slice(0, 100),\n    cover_title: ('Cover letter - ' + title + ' - ' + today).slice(0, 100),\n    notes_title: ('Notes and interview prep - ' + title + ' - ' + today).slice(0, 100),\n    summary: r.summary,\n    employer_a_bullets: r.employer_a_bullets,\n    employer_b_bullets: r.employer_b_bullets,\n    employer_c_bullets: r.employer_c_bullets,\n    cover_letter_text: String(r.cover_letter_full || ''),\n    notes_text: notes\n  } });\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        368
+      ],
+      "id": "084b9ea7-94eb-4d83-848b-526719523028",
+      "name": "Build Documents"
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $now.toFormat('dd-MM-yyyy') }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "YOUR_DRIVE_FOLDER_ID",
+          "mode": "id",
+          "cachedResultName": "Job Applications"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        624,
+        368
+      ],
+      "id": "222f1aee-43f3-4f08-a674-a38090bd2e40",
+      "name": "Create Day Folder",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const folderId = $input.first().json.id;\nreturn $('Build Documents').all().map(i => ({ json: { ...i.json, folder_id: folderId } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        368
+      ],
+      "id": "e1cf440d-8074-4a3f-8598-a44f0f272408",
+      "name": "Prepare Docs"
+    },
+    {
+      "parameters": {
+        "operation": "copy",
+        "fileId": {
+          "__rl": true,
+          "value": "YOUR_CV_TEMPLATE_DOC_ID",
+          "mode": "id"
+        },
+        "name": "={{ $('Prepare Docs').all()[$itemIndex].json.cv_title }}",
+        "sameFolder": false,
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Prepare Docs').all()[$itemIndex].json.folder_id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1072,
+        368
+      ],
+      "id": "759e014c-435f-48a9-ab15-6d5839b948ea",
+      "name": "Copy CV Template"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "replaceAll",
+              "text": "={{ '{' + '{SUMMARY}' + '}' }}",
+              "replaceText": "={{ $('Prepare Docs').all()[$itemIndex].json.summary }}",
+              "matchCase": true
+            },
+            {
+              "action": "replaceAll",
+              "text": "={{ '{' + '{EMPLOYER_A_BULLETS}' + '}' }}",
+              "replaceText": "={{ $('Prepare Docs').all()[$itemIndex].json.employer_a_bullets }}",
+              "matchCase": true
+            },
+            {
+              "action": "replaceAll",
+              "text": "={{ '{' + '{EMPLOYER_B_BULLETS}' + '}' }}",
+              "replaceText": "={{ $('Prepare Docs').all()[$itemIndex].json.employer_b_bullets }}",
+              "matchCase": true
+            },
+            {
+              "action": "replaceAll",
+              "text": "={{ '{' + '{EMPLOYER_C_BULLETS}' + '}' }}",
+              "replaceText": "={{ $('Prepare Docs').all()[$itemIndex].json.employer_c_bullets }}",
+              "matchCase": true
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        560
+      ],
+      "id": "b254b004-6c0f-4779-826f-71e3ddbb24b5",
+      "name": "Fill CV Template"
+    },
+    {
+      "parameters": {
+        "operation": "copy",
+        "fileId": {
+          "__rl": true,
+          "value": "YOUR_COVER_LETTER_TEMPLATE_DOC_ID",
+          "mode": "id"
+        },
+        "name": "={{ $('Prepare Docs').all()[$itemIndex].json.cover_title }}",
+        "sameFolder": false,
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Prepare Docs').all()[$itemIndex].json.folder_id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1440,
+        560
+      ],
+      "id": "c8980e44-80b2-4d1b-99ec-b1da3cb2bb5e",
+      "name": "Copy Cover Letter Template"
+    },
+    {
+      "parameters": {
+        "folderId": "={{ $('Prepare Docs').all()[$itemIndex].json.folder_id }}",
+        "title": "={{ $('Prepare Docs').all()[$itemIndex].json.notes_title }}"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        1888,
+        560
+      ],
+      "id": "9d2ec00f-5077-42b5-99b4-9acc1e0ca47e",
+      "name": "Create Notes Doc"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $('Prepare Docs').all()[$itemIndex].json.notes_text }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        2064,
+        560
+      ],
+      "id": "3049f700-b46e-47ee-b170-3620a9a1c6a2",
+      "name": "Write Notes"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "replaceAll",
+              "text": "={{ '{' + '{DATE}' + '}' }}",
+              "replaceText": "={{ $now.toFormat('dd-MM-yyyy') }}",
+              "matchCase": true
+            },
+            {
+              "action": "replaceAll",
+              "text": "={{ '{' + '{JOB_TITLE}' + '}' }}",
+              "replaceText": "={{ $('Prepare Docs').all()[$itemIndex].json.job_title }}",
+              "matchCase": true
+            },
+            {
+              "action": "replaceAll",
+              "text": "={{ '{' + '{COVER_LETTER}' + '}' }}",
+              "replaceText": "={{ $('Prepare Docs').all()[$itemIndex].json.cover_letter_text }}",
+              "matchCase": true
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        560
+      ],
+      "id": "06aea9ae-fbef-4590-a192-e39bf8b835c7",
+      "name": "Fill Cover Letter"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get Approved Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Approved Jobs": {
+      "main": [
+        [
+          {
+            "node": "Get Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Profile": {
+      "main": [
+        [
+          {
+            "node": "Build Application Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Application Prompt": {
+      "main": [
+        [
+          {
+            "node": "Write Materials",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Materials": {
+      "main": [
+        [
+          {
+            "node": "Claude answered?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Materials": {
+      "main": [
+        [
+          {
+            "node": "Save Materials",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Materials": {
+      "main": [
+        [
+          {
+            "node": "Mark Materials Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get Approved Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude answered?": {
+      "main": [
+        [
+          {
+            "node": "Parse Materials",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Materials Ready": {
+      "main": [
+        [
+          {
+            "node": "Build Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Documents": {
+      "main": [
+        [
+          {
+            "node": "Create Day Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Day Folder": {
+      "main": [
+        [
+          {
+            "node": "Prepare Docs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Docs": {
+      "main": [
+        [
+          {
+            "node": "Copy CV Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Copy CV Template": {
+      "main": [
+        [
+          {
+            "node": "Fill CV Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fill CV Template": {
+      "main": [
+        [
+          {
+            "node": "Copy Cover Letter Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Copy Cover Letter Template": {
+      "main": [
+        [
+          {
+            "node": "Fill Cover Letter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Notes Doc": {
+      "main": [
+        [
+          {
+            "node": "Write Notes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fill Cover Letter": {
+      "main": [
+        [
+          {
+            "node": "Create Notes Doc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "any",
+    "availableInMCP": false
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

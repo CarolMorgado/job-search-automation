@@ -1,0 +1,491 @@
+{
+  "name": "Job Search: 6 Outreach",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5a243fe4-0c57-467d-8c42-a87d3e2c3a7f",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_JOBS_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Jobs"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        224,
+        0
+      ],
+      "id": "dfa1d1b1-dd91-4480-bef0-2eea9594de23",
+      "name": "Get Jobs"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_CONTACTS_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Contacts"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        448,
+        0
+      ],
+      "id": "41db7280-eedd-44e1-bad1-94dc72c71c56",
+      "name": "Get Contacts",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_PROFILE_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Professional Profile"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        896,
+        0
+      ],
+      "id": "31f4ae1a-3e41-4a11-8c98-23427e9c6785",
+      "name": "Get Profile",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_OUTREACH_LOG_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Outreach Log"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        1088,
+        0
+      ],
+      "id": "18258e3a-521d-4d09-820b-4f1c77768b82",
+      "name": "Get Existing Outreach",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const MAX_JOBS = 10;      // jobs per run\nconst MAX_CONTACTS = 3;   // linked contacts per job\n\nconst jobs = $('Get Jobs').all().map(i => i.json)\n  .filter(j => j.id && ['Will Apply', 'Reaching Out'].includes(String(j.property_decision || '')))\n  .slice(0, MAX_JOBS);\nconst contacts = $('Get Contacts').all().map(i => i.json).filter(c => c.id);\nconst profileRows = $('Get Profile').all().map(i => i.json).filter(p => p.id);\nconst existing = $('Get Existing Outreach').all().map(i => i.json).filter(o => o.id);\n\n// Company names (optional: works even if the Get Companies node is missing)\nconst coName = {};\ntry {\n  $('Get Companies').all().map(i => i.json).filter(c => c.id).forEach(c => { coName[c.id] = c.name || ''; });\n} catch (e) {}\n\nconst cById = {};\ncontacts.forEach(c => { cById[c.id] = c; });\n\n// Skip drafts that already exist: job|contact for contacts, job|hm for the hiring-manager message\nconst done = new Set();\nexisting.forEach(o => {\n  const j = (o.property_job || [])[0];\n  const c = (o.property_contact || [])[0];\n  if (j && c) done.add(j + '|' + c);\n  if (j && !c) done.add(j + '|hm');\n});\n\nconst g = (p, k) => String(p[k] || '');\nconst PROFILE = profileRows.slice(0, 12).map(p =>\n  '- ' + g(p, 'property_role') + ' at ' + g(p, 'property_employer') + ': ' +\n  g(p, 'property_what_i_did').slice(0, 200) +\n  (g(p, 'property_result_x') ? ' Result: ' + g(p, 'property_result_x').slice(0, 150) : '')\n).join('\\n');\n\n// ---------- Prompt for a contact (warm or cold) ----------\nconst SYSTEM_CONTACT = `You write short LinkedIn messages for a job seeker in Berlin who targets Business Analyst, Project Coordinator and PMO roles.\n\nRULES\n- Write in English.\n- Maximum 60 words. Count them. No subject line. No emojis. No placeholders such as [Name].\n- Start with \"Hi <first name>,\".\n- Use ONLY facts from the CANDIDATE PROFILE and the contact details given. Never invent shared history, projects or numbers.\n- Mention the specific job title and company once.\n- One clear, small ask. Never ask directly for a job.\n- Sound human, warm and direct. No clichés such as \"I hope this message finds you well\".\n\nTYPE WARM (the candidate knows this person): friendly tone, ask for a 15-minute chat or for their view on the team. Mention a shared connection only if the relationship or notes say so.\nTYPE COLD (only the company in common): brief and respectful. Say in one sentence why the candidate's background fits (one real fact from the profile), then ask for a short insight about the team or the role. Keep the candidate's own background to one sentence. Spend the rest on a specific question about the contact's role or team.\n\nReturn ONLY the message text.`;\n\n// ---------- Prompt for the hiring manager (name unknown) ----------\nconst SYSTEM_HM = `You write LinkedIn outreach for a job seeker in Berlin who targets Business Analyst, Project Coordinator and PMO roles. The candidate has just applied for the job below and now writes to the hiring manager or team lead. Their name is not known yet.\n\nRULES\n- Write in English. No emojis. No placeholders such as [Name] or [Company].\n- Use ONLY facts from the CANDIDATE PROFILE and the job details. Never invent shared history, projects, numbers or tools.\n- Mention the job title and the company by name.\n- Say in one short sentence that the candidate has applied. Show fit with ONE real result from the profile that matches what the employer needs.\n- One clear, small ask, such as a short chat or a pointer on what the team values. Never beg for a job.\n- Sound human, direct and respectful. No clichés such as \"I hope this message finds you well\".\n\nOUTPUT FORMAT (plain text, exactly these two labels)\nCONNECTION NOTE:\nStarts with \"Hi,\". STRICT LIMIT: at most 220 characters including spaces, which is about 35 words. Write only two short sentences: (1) you applied for the job at the company, (2) one short fit point and the ask. Stop there. Your counting tends to run over, so keep it clearly shorter than you think necessary.\n\nFOLLOW-UP MESSAGE:\nStarts with \"Hi,\". Between 60 and 80 words, in four short sentences at most.`;\n\nconst out = [];\nfor (const j of jobs) {\n  const company = (Array.isArray(j.property_company) && j.property_company[0]) ? (coName[j.property_company[0]] || '') : '';\n  const jobBlock =\n    'JOB TITLE: ' + (j.name || '') + '\\n' +\n    'COMPANY: ' + (company || 'see the job description') + '\\n' +\n    'LOCATION: ' + String(j.property_location || '') + '\\n' +\n    'WHAT THE EMPLOYER NEEDS:\\n' + String(j.property_employer_problems || '').slice(0, 800) + '\\n' +\n    'JOB DESCRIPTION (start):\\n' + String(j.property_raw_job_description || '').slice(0, 1200) + '\\n\\n';\n\n  // 1. Cold message to the hiring manager, once per job\n  if (!done.has(j.id + '|hm')) {\n    out.push({ json: {\n      job_id: j.id,\n      job_title: j.name || '',\n      company,\n      contact_id: '',\n      contact_name: '',\n      type: 'Cold',\n      kind: 'hiring_manager',\n      body: {\n        model: 'claude-haiku-5-5',\n        max_tokens: 600,\n        thinking: { type: 'disabled' },\n        system: SYSTEM_HM,\n        messages: [{ role: 'user', content: jobBlock + 'CANDIDATE PROFILE:\\n' + PROFILE }]\n      }\n    } });\n  }\n\n  // 2. Messages to linked contacts (warm if a relationship is set, otherwise cold)\n  const ids = (Array.isArray(j.property_contacts) ? j.property_contacts : []).slice(0, MAX_CONTACTS);\n  for (const cid of ids) {\n    const c = cById[cid];\n    if (!c || done.has(j.id + '|' + cid)) continue;\n\n    const relationship = String(c.property_relationship || '');\n    const type = relationship ? 'Warm' : 'Cold';\n\n    const user =\n      'TYPE: ' + type + '\\n' +\n      'CONTACT: ' + (c.name || '') + ', ' + String(c.property_position || '') + '\\n' +\n      'RELATIONSHIP: ' + (relationship || 'none') + '\\n' +\n      'NOTES: ' + String(c.property_notes || '').slice(0, 300) + '\\n\\n' +\n      jobBlock + 'CANDIDATE PROFILE:\\n' + PROFILE;\n\n    out.push({ json: {\n      job_id: j.id,\n      job_title: j.name || '',\n      company,\n      contact_id: cid,\n      contact_name: c.name || '',\n      type,\n      kind: 'contact',\n      body: {\n        model: 'claude-haiku-5-5',\n        max_tokens: 250,\n        thinking: { type: 'disabled' },\n        system: SYSTEM_CONTACT,\n        messages: [{ role: 'user', content: user }]\n      }\n    } });\n  }\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        0
+      ],
+      "id": "f023a548-cb06-4708-827f-b0f9df9b319e",
+      "name": "Build Outreach Prompt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1536,
+        0
+      ],
+      "id": "bfcb4f18-c2b5-4f0e-b2c8-b4fe64fd5914",
+      "name": "Ask Claude",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const block = ($json.content || []).find(c => c.type === 'text');\nlet message = (block ? block.text : '').trim();\nconst src = $('Build Outreach Prompt').item.json;\n\nconst isHM = src.kind === 'hiring_manager';\n\n// For the hiring-manager message, check the 300-character limit of LinkedIn connection notes\nif (isHM) {\n  const m = message.match(/CONNECTION NOTE:\\s*([\\s\\S]*?)\\s*FOLLOW-UP MESSAGE:/i);\n  if (m && m[1].trim().length > 300) {\n    message = 'WARNING: the connection note has ' + m[1].trim().length + ' characters. Shorten it to 300 before sending.\\n\\n' + message;\n  }\n}\nmessage = message.slice(0, 1900); // Notion text limit is 2000\n\nconst name = isHM\n  ? ('Hiring manager - ' + src.job_title + (src.company ? ' (' + src.company + ')' : '')).slice(0, 200)\n  : ('Message to ' + src.contact_name + ' - ' + src.job_title).slice(0, 200);\n\nreturn { json: {\n  job_id: src.job_id,\n  contact_id: src.contact_id || '',\n  name,\n  type: src.type,\n  message\n} };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1712,
+        0
+      ],
+      "id": "2d899c1d-dddf-4fd2-b72e-7cb7813df697",
+      "name": "Parse Message"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_OUTREACH_LOG_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Outreach Log"
+        },
+        "title": "={{ $json.name }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Job|relation",
+              "relationValue": [
+                "={{ $json.job_id }}"
+              ]
+            },
+            {
+              "key": "Contact|relation",
+              "relationValue": [
+                "={{ $json.contact_id }}"
+              ]
+            },
+            {
+              "key": "Message|rich_text",
+              "textContent": "={{ $json.message }}"
+            },
+            {
+              "key": "Type|select",
+              "selectValue": "={{ $json.type }}"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "Draft"
+            }
+          ]
+        },
+        "blockUi": {
+          "blockValues": [
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        2160,
+        0
+      ],
+      "id": "eba8ee64-dea1-4fb8-91ee-a8612293823c",
+      "name": "Save to Outreach Log"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        208
+      ],
+      "id": "36c489ae-cfc0-46dc-bc7b-0476e4a3ef40",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_COMPANIES_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Companies"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        656,
+        0
+      ],
+      "id": "37e2e0e0-b8dd-41c0-91e6-47b7577b1452",
+      "name": "Get Companies",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "55de21f6-fc89-4b93-87e3-a35d251ff7ed",
+              "leftValue": "={{ $json.contact_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1936,
+        0
+      ],
+      "id": "eb0b5695-8813-4dc0-a8cd-d618e73fc956",
+      "name": "Has contact?"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "YOUR_OUTREACH_LOG_DATABASE_ID",
+          "mode": "id",
+          "cachedResultName": "Outreach Log"
+        },
+        "title": "={{ $json.name }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Job|relation",
+              "relationValue": [
+                "={{ $json.job_id }}"
+              ]
+            },
+            {
+              "key": "Message|rich_text",
+              "textContent": "={{ $json.message }}"
+            },
+            {
+              "key": "Type|select",
+              "selectValue": "={{ $json.type }}"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "Draft"
+            }
+          ]
+        },
+        "blockUi": {
+          "blockValues": [
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        2176,
+        192
+      ],
+      "id": "b63d0574-4b1b-479a-834e-87e15d908643",
+      "name": "Save Hiring Manager Draft"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Jobs": {
+      "main": [
+        [
+          {
+            "node": "Get Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Contacts": {
+      "main": [
+        [
+          {
+            "node": "Get Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Profile": {
+      "main": [
+        [
+          {
+            "node": "Get Existing Outreach",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Existing Outreach": {
+      "main": [
+        [
+          {
+            "node": "Build Outreach Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Outreach Prompt": {
+      "main": [
+        [
+          {
+            "node": "Ask Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask Claude": {
+      "main": [
+        [
+          {
+            "node": "Parse Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Message": {
+      "main": [
+        [
+          {
+            "node": "Has contact?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Companies": {
+      "main": [
+        [
+          {
+            "node": "Get Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has contact?": {
+      "main": [
+        [
+          {
+            "node": "Save to Outreach Log",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Hiring Manager Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "any",
+    "availableInMCP": false
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

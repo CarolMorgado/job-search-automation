@@ -1,0 +1,342 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Job Search Automation Demo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one working page with four tabs. A rules panel on top drives a live funnel, so the visitor sees why each job lands where it does. */
+:root {
+  --bg: #f1f4f6;
+  --surface: #ffffff;
+  --ink: #15212b;
+  --muted: #586977;
+  --line: #d8e0e6;
+  --accent: #0e7c74;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcf1ee;
+  --good: #1b7f4b;
+  --good-soft: #def3e6;
+  --warn: #a35a06;
+  --warn-soft: #fbecd3;
+  --bad: #b3262d;
+  --bad-soft: #f9dfe0;
+  --f-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e151b; --surface: #16202a; --ink: #e5ecf2; --muted: #93a4b3; --line: #25333f;
+    --accent: #2cc4b6; --accent-ink: #06201d; --accent-soft: #123a37;
+    --good: #5fd08f; --good-soft: #15361f; --warn: #f0b45a; --warn-soft: #3b2a0f;
+    --bad: #ff8a8f; --bad-soft: #3d1a1c; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e151b; --surface: #16202a; --ink: #e5ecf2; --muted: #93a4b3; --line: #25333f;
+  --accent: #2cc4b6; --accent-ink: #06201d; --accent-soft: #123a37;
+  --good: #5fd08f; --good-soft: #15361f; --warn: #f0b45a; --warn-soft: #3b2a0f;
+  --bad: #ff8a8f; --bad-soft: #3d1a1c; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--f-sans); font-size: 15px; line-height: 1.5;
+  padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1 { font-size: 26px; line-height: 1.2; margin: 0; font-weight: 600; text-wrap: balance; }
+h2 { font-size: 16px; margin: 0 0 4px; font-weight: 600; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.mono { font-family: var(--f-mono); }
+header { display: flex; flex-direction: column; gap: 10px; }
+.badge-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+.pill.good { background: var(--good-soft); color: var(--good); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+.pill.plain { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; margin-top: 12px; }
+.rule { display: flex; gap: 10px; align-items: flex-start; }
+.rule input[type=checkbox] { margin-top: 4px; width: 16px; height: 16px; accent-color: var(--accent); flex: none; }
+.rule label { display: flex; flex-direction: column; gap: 1px; cursor: pointer; }
+.rule small { color: var(--muted); font-size: 12.5px; }
+.slider { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.slider input { accent-color: var(--accent); flex: 1 1 200px; max-width: 360px; }
+.funnel { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.tile b { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.tile span { font-size: 13px; color: var(--muted); }
+.tile.t-jobs b { color: var(--good); } .tile.t-trash b { color: var(--warn); } .tile.t-drop b { color: var(--bad); }
+nav.tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); }
+nav.tabs button { font: inherit; background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; color: var(--muted); cursor: pointer; font-weight: 500; }
+nav.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+nav.tabs button:hover { color: var(--ink); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; min-width: 760px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td .sub { color: var(--muted); font-size: 13px; }
+td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+button.act { font: inherit; font-size: 13px; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); cursor: pointer; font-weight: 500; }
+button.act:hover { filter: brightness(1.08); }
+button.ghost { background: transparent; color: var(--accent); }
+.empty { padding: 28px 16px; text-align: center; color: var(--muted); }
+.note { font-size: 13px; color: var(--muted); }
+.mat { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.mat .panel { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.mat ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.mat .panel p + p { margin-top: 6px; }
+select { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); max-width: 100%; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+footer { font-size: 13px; color: var(--muted); }
+.flow { display: flex; flex-wrap: wrap; gap: 6px 4px; align-items: center; font-size: 13px; color: var(--muted); }
+.flow span.s { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; color: var(--ink); }
+.flow i { font-style: normal; color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) { .tile b { transition: color .2s; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="badge-row"><span class="pill warn">Demo with invented data</span><span class="pill plain">No real jobs, companies or people</span></div>
+    <h1>Job Search Automation, live demo</h1>
+    <p class="muted" style="max-width:68ch">The real system runs in n8n with Claude, Notion and Gmail. This page runs the same filter and scoring rules in your browser on 16 made-up postings. Change a rule and watch where each job lands.</p>
+    <div class="flow" aria-label="Daily pipeline">
+      <span class="s">Find jobs</span><i>→</i><span class="s">Language and location filters</span><i>→</i><span class="s">Pre-score</span><i>→</i><span class="s">Jobs or Trash</span><i>→</i><span class="s">Claude verdict</span><i>→</i><span class="s">CV and cover letter</span><i>→</i><span class="s">Morning briefing</span>
+    </div>
+  </header>
+
+  <section class="panel" aria-labelledby="rules-h">
+    <h2 id="rules-h">Rules</h2>
+    <p class="note">Switch rules on or off. The numbers and the lists below update at once.</p>
+    <div class="rules">
+      <div class="rule"><input type="checkbox" id="r-us" checked><label for="r-us">Accept remote jobs based in the US<small>Postings that ask for US work authorization are always dropped.</small></label></div>
+      <div class="rule"><input type="checkbox" id="r-50" checked><label for="r-50">Send companies under 50 employees to Trash<small>You decide later. Unknown size passes.</small></label></div>
+      <div class="rule"><input type="checkbox" id="r-en" checked><label for="r-en">Keep German postings that ask for English<small>Other German-language postings are dropped.</small></label></div>
+      <div class="slider"><label for="r-th"><b>Score needed for Jobs</b></label><input type="range" id="r-th" min="30" max="80" step="5" value="50"><span class="mono" id="r-th-v">above 50</span><span class="note">Below that, down to 30, goes to Trash. Under 30 is dropped.</span></div>
+    </div>
+  </section>
+
+  <section class="funnel" id="funnel" aria-live="polite"></section>
+
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button role="tab" id="tab-pipeline" aria-selected="true" data-tab="pipeline">Today's postings</button>
+    <button role="tab" id="tab-jobs" aria-selected="false" data-tab="jobs">Jobs</button>
+    <button role="tab" id="tab-trash" aria-selected="false" data-tab="trash">Trash Jobs</button>
+    <button role="tab" id="tab-mat" aria-selected="false" data-tab="mat">Application materials</button>
+  </nav>
+
+  <main id="view"></main>
+
+  <footer>All companies, postings, names and numbers on this page are invented for the demo. The scoring and verdict logic is a simplified copy of the real workflows. In the real system Claude writes the verdicts and the materials; here they are sample text.</footer>
+</div>
+
+<script>
+(function () {
+  var TITLE_STRONG = ['business analyst','it business analyst','junior business analyst','project coordinator','pmo','project assistant','project support','functional analyst','test analyst','junior project manager'];
+  var TITLE_WEAK = ['analyst','coordinator','project','assistant','business'];
+  var SKILLS = ['sql','jira','confluence','uat','user acceptance','requirements','stakeholder','process','excel','power bi','agile','scrum','documentation','reporting','erp','sap','test','data analysis','project management','user stories','workshop','compliance','finance','ifrs'];
+  var GERMAN_NEEDED = ['german required','fluent german','fluency in german','german language','native german','german c1','german (c1','german is a must','proficiency in german','good command of german','deutschkenntnisse','german speaking'];
+  var US_AUTH = ['authorized to work in the u','authorised to work in the u','legally authorized to work','eligible to work in the u','work authorization','work authorisation','no sponsorship','without sponsorship','not provide sponsorship','u.s. citizen','us citizen','security clearance'];
+  var DE = [' und ',' die ',' der ',' das ',' wir ',' für ',' mit ',' sie ',' du ',' dein','aufgaben','kenntnisse',' bei '];
+  var EN = [' and ',' the ',' you ',' we ',' with ',' for ',' your ',' our ',' will ','experience'];
+  var ENGLISH_WANTED = /(flie(ß|ss)end\w*|verhandlungssicher\w*|sehr gute\w*|gute\w*|exzellente\w*|ausgezeichnete\w*|fluent|business fluent)[^.\n]{0,40}(englisch\w*|english)|(englisch\w*|english)[^.\n]{0,40}(flie(ß|ss)end\w*|verhandlungssicher\w*|fluent|in wort und schrift)|englisch in wort und schrift/;
+  var PLACEHOLDER = 'Imported from a LinkedIn alert. Open the link and paste the job description here.';
+  var MIN_TRASH = 30;
+
+  var JOBS = [
+    { id: 1, title: 'Business Analyst', company: 'Lumenfield GmbH', location: 'Berlin, Germany', remote: false, emp: 220, seniority: '', source: 'TheirStack', desc: 'You will gather requirements, write user stories in Jira and run UAT with stakeholders in an agile team. SQL and Excel are a plus.' },
+    { id: 2, title: 'Junior Project Coordinator', company: 'Kestrel Logistics', location: 'Germany (Remote)', remote: true, emp: 540, seniority: '', source: 'TheirStack', desc: 'Coordinate project schedules, track risks and prepare weekly reporting for the operations team. Jira or Confluence experience helps.' },
+    { id: 3, title: 'PMO Analyst', company: 'Harbor & Pine Software', location: 'European Union (Remote)', remote: true, emp: 310, seniority: '', source: 'TheirStack', desc: 'Support the PMO with status reports and stakeholder updates. Strong Excel skills.' },
+    { id: 4, title: 'Business Analyst', company: 'Tessera Health', location: 'United States (Remote)', remote: true, emp: 900, seniority: '', source: 'TheirStack', desc: 'Translate team needs into requirements. Work closely with product managers.' },
+    { id: 5, title: 'Functional Analyst', company: 'Vantora Energy', location: 'United States (Remote)', remote: true, emp: 1500, seniority: '', source: 'TheirStack', desc: 'Applicants must be authorized to work in the U.S. without sponsorship. You will document functional requirements.' },
+    { id: 6, title: 'Project Assistant', company: 'Orchard Finance', location: 'Hamburg, Germany', remote: false, emp: 400, seniority: '', source: 'TheirStack', desc: 'Support the project office on site in Hamburg.' },
+    { id: 7, title: 'Test Analyst', company: 'Brightway Labs', location: 'Germany (Remote)', remote: true, emp: 22, seniority: '', source: 'TheirStack', desc: 'Plan and run test cases, report defects in Jira and join agile ceremonies.' },
+    { id: 8, title: 'Business Analyst (m/w/d)', company: 'Quillmark Systems', location: 'Berlin, Germany', remote: false, emp: 160, seniority: '', source: 'TheirStack', desc: 'Wir suchen für unser Team in Berlin eine Business Analystin. Ihre Aufgaben: Anforderungen aufnehmen und mit der Fachabteilung abstimmen. Sie bringen Kenntnisse in Prozessen mit und arbeiten mit uns im Team. Wir bieten flexible Arbeitszeiten für Sie und für die Entwicklung bei uns.' },
+    { id: 9, title: 'Project Analyst (m/w/d)', company: 'Fenwick Digital', location: 'Berlin, Germany', remote: false, emp: 75, seniority: '', source: 'TheirStack', desc: 'Wir suchen für unser Team eine Projektanalystin. Ihre Aufgaben: Projekte koordinieren und mit der Fachabteilung abstimmen. Sie bringen Kenntnisse in Jira mit und sprechen fließend Englisch, da wir international arbeiten. Wir bieten Ihnen viel Raum für Ihre Ideen und für die Entwicklung.' },
+    { id: 10, title: 'Senior Business Analyst', company: 'Cobalt Freight', location: 'European Union (Remote)', remote: true, emp: 1200, seniority: 'senior', source: 'TheirStack', desc: 'Own requirements for our routing platform and align stakeholders across regions.' },
+    { id: 11, title: 'Senior Sales Manager', company: 'Marlow Retail', location: 'Germany (Remote)', remote: true, emp: 800, seniority: 'senior', source: 'TheirStack', desc: 'Lead regional sales across the DACH market.' },
+    { id: 12, title: 'Business Analyst', company: 'Alderwood Media', location: 'Berlin, Germany (Remote)', remote: true, emp: null, seniority: '', source: 'LinkedIn alert', desc: PLACEHOLDER, pasted: 'Work with editors and engineers to define requirements for a new content platform. Write user stories, document processes and run UAT with stakeholders. SQL and Excel skills, agile way of working.' },
+    { id: 13, title: 'PMO Analyst', company: 'Aster Insurance', location: 'Munich, Germany (Hybrid)', remote: false, emp: 3000, seniority: '', source: 'TheirStack', desc: 'Support portfolio reporting in the Munich office three days a week.' },
+    { id: 14, title: 'Clinical Project Coordinator', company: 'Ledger & Loom', location: 'United Kingdom (Remote)', remote: true, emp: 150, seniority: '', source: 'TheirStack', desc: 'Coordinate study documents, compliance checks and reporting.' },
+    { id: 15, title: 'IT Business Analyst', company: 'Ostrava Systems', location: 'Germany (Remote)', remote: true, emp: 260, seniority: '', source: 'TheirStack', desc: 'Fluent German is required. You will analyse requirements, write user stories and test with Jira.' },
+    { id: 16, title: 'Junior Project Manager', company: 'Pinecrest Studio', location: 'Germany (Remote)', remote: true, emp: null, seniority: '', source: 'LinkedIn alert', desc: PLACEHOLDER, pasted: 'Plan and track delivery for client projects with a small team. Prepare reporting, manage stakeholders and documentation, and work in an agile setup with Jira and Confluence.' }
+  ];
+
+  var state = { us: true, u50: true, en: true, th: 50, tab: 'pipeline', rescued: {}, mat: null };
+
+  function count(t, arr) { var n = 0; arr.forEach(function (k) { n += t.split(k).length - 1; }); return n; }
+  function has(t, arr) { return arr.some(function (k) { return t.indexOf(k) !== -1; }); }
+
+  function evaluate(j) {
+    var desc = String(j.desc).toLowerCase();
+    var title = j.title.toLowerCase();
+    var loc = j.location.toLowerCase();
+    var placeholder = j.desc === PLACEHOLDER;
+    var out = { score: null, where: 'drop', reason: '' };
+
+    if (!placeholder) {
+      var full = ' ' + desc.slice(0, 3000) + ' ';
+      var german = count(full, DE) > count(full, EN);
+      if (german && !(state.en && ENGLISH_WANTED.test(desc))) { out.reason = 'German-language posting'; return out; }
+    }
+    if (has(desc, US_AUTH)) { out.reason = 'Asks for US work authorization'; return out; }
+    var berlin = loc.indexOf('berlin') !== -1;
+    var remote = j.remote || /remote|home office|homeoffice/.test(loc);
+    if (!berlin && !remote) { out.reason = 'On-site or hybrid outside Berlin'; return out; }
+    if (!state.us && /united states|, us\b/.test(loc)) { out.reason = 'US remote switched off'; return out; }
+
+    var s = 0;
+    if (has(title, TITLE_STRONG)) s += 30; else if (has(title, TITLE_WEAK)) s += 15;
+    s += Math.min(25, SKILLS.filter(function (k) { return desc.indexOf(k) !== -1; }).length * 5);
+    s += 15;
+    if (!has(desc, GERMAN_NEEDED)) s += 10;
+    var senior = ['senior','staff','c_level'].indexOf(j.seniority) !== -1 || /senior|principal|head of|director|lead\b/.test(title);
+    s += senior ? -15 : 5;
+    out.score = s;
+
+    if (s < MIN_TRASH) { out.reason = 'Score below 30'; return out; }
+    if (state.u50 && j.emp !== null && j.emp < 50) { out.where = 'trash'; out.reason = 'Under 50 employees'; return out; }
+    if (s <= state.th) { out.where = 'trash'; out.reason = 'Low pre-score'; return out; }
+    if (placeholder) { out.where = 'trash'; out.reason = 'No description'; return out; }
+    out.where = 'jobs'; out.reason = 'Passed all filters';
+    return out;
+  }
+
+  function verdict(score) { return score >= 75 ? 'Will Apply' : score >= 60 ? 'Maybe' : 'Skip'; }
+
+  function all() {
+    return JOBS.map(function (j) { var e = evaluate(j); return { job: j, ev: e }; });
+  }
+
+  function whereChip(ev, jobId) {
+    var r = state.rescued[jobId];
+    if (r) return '<span class="pill good">Rescued to Jobs</span>';
+    if (ev.where === 'jobs') return '<span class="pill good">Jobs</span>';
+    if (ev.where === 'trash') return '<span class="pill warn">Trash</span>';
+    return '<span class="pill bad">Dropped</span>';
+  }
+
+  function renderFunnel(rows) {
+    var jobs = 0, trash = 0, drop = 0;
+    rows.forEach(function (r) {
+      if (state.rescued[r.job.id]) { jobs++; return; }
+      if (r.ev.where === 'jobs') jobs++; else if (r.ev.where === 'trash') trash++; else drop++;
+    });
+    document.getElementById('funnel').innerHTML =
+      '<div class="tile"><b>' + rows.length + '</b><span>Postings fetched today</span></div>' +
+      '<div class="tile t-drop"><b>' + drop + '</b><span>Dropped, never saved</span></div>' +
+      '<div class="tile t-trash"><b>' + trash + '</b><span>In Trash Jobs, for you to review</span></div>' +
+      '<div class="tile t-jobs"><b>' + jobs + '</b><span>In Jobs, ready for Claude</span></div>';
+  }
+
+  function viewPipeline(rows) {
+    var h = '<div class="tablewrap"><table><thead><tr><th>Posting</th><th>Location</th><th>Source</th><th>Score</th><th>Lands in</th><th>Why</th></tr></thead><tbody>';
+    rows.forEach(function (r) {
+      h += '<tr><td><b>' + r.job.title + '</b><div class="sub">' + r.job.company + '</div></td><td>' + r.job.location + '</td><td>' + r.job.source + '</td><td class="num">' + (r.ev.score === null ? '–' : r.ev.score) + '</td><td>' + whereChip(r.ev, r.job.id) + '</td><td>' + (state.rescued[r.job.id] ? 'You ticked Rescue' : r.ev.reason) + '</td></tr>';
+    });
+    return h + '</tbody></table></div>';
+  }
+
+  function jobsList(rows) {
+    return rows.filter(function (r) { return state.rescued[r.job.id] || r.ev.where === 'jobs'; })
+      .map(function (r) {
+        var resc = !!state.rescued[r.job.id];
+        return { job: r.job, score: resc ? 100 : r.ev.score, verdict: resc ? 'Will Apply' : verdict(r.ev.score), resc: resc };
+      }).sort(function (a, b) { return b.score - a.score; });
+  }
+
+  function viewJobs(rows) {
+    var list = jobsList(rows);
+    if (!list.length) return '<div class="panel empty">No job passes the filters with these rules.</div>';
+    var h = '<div class="tablewrap"><table><thead><tr><th>Job</th><th>Location</th><th>Pre-score</th><th>Claude verdict (sample)</th><th>Source</th></tr></thead><tbody>';
+    list.forEach(function (x) {
+      var cls = x.verdict === 'Will Apply' ? 'good' : x.verdict === 'Maybe' ? 'warn' : 'bad';
+      h += '<tr><td><b>' + x.job.title + '</b><div class="sub">' + x.job.company + '</div></td><td>' + x.job.location + '</td><td class="num">' + x.score + '</td><td><span class="pill ' + cls + '">' + x.verdict + '</span></td><td>' + (x.resc ? 'Rescued from Trash (' + x.job.source + ')' : x.job.source) + '</td></tr>';
+    });
+    return h + '</tbody></table></div><p class="note" style="margin-top:10px">Jobs with the verdict Will Apply get a tailored CV, cover letter and notes the next morning at 06:00.</p>';
+  }
+
+  function viewTrash(rows) {
+    var list = rows.filter(function (r) { return r.ev.where === 'trash' && !state.rescued[r.job.id]; });
+    var done = Object.keys(state.rescued).length;
+    var h = '<p class="note" style="margin-bottom:10px">Review the jobs here. Tick Rescue and the nightly run (23:00 in the real system) moves the job to Jobs as Will Apply. In this demo the button does it at once.</p>';
+    if (!list.length) return h + '<div class="panel empty">' + (done ? 'Everything in Trash has been rescued.' : 'Nothing in Trash with these rules.') + '</div>';
+    h += '<div class="tablewrap"><table><thead><tr><th>Job</th><th>Location</th><th>Reason</th><th>Score</th><th>Description</th><th></th></tr></thead><tbody>';
+    list.forEach(function (r) {
+      var j = r.job; var ph = j.desc === PLACEHOLDER;
+      h += '<tr><td><b>' + j.title + '</b><div class="sub">' + j.company + (j.emp !== null ? ' · ' + j.emp + ' employees' : '') + '</div></td><td>' + j.location + '</td><td><span class="pill warn">' + r.ev.reason + '</span></td><td class="num">' + r.ev.score + '</td><td class="sub" style="max-width:300px">' + (ph ? 'Placeholder only' : j.desc.slice(0, 110) + (j.desc.length > 110 ? '…' : '')) + '</td><td><button class="act" data-rescue="' + j.id + '">' + (ph ? 'Paste description and rescue' : 'Rescue') + '</button></td></tr>';
+    });
+    return h + '</tbody></table></div>';
+  }
+
+  function materialsFor(j) {
+    var role = j.title.replace(/ \(m\/w\/d\)/, '');
+    var co = j.company;
+    return {
+      summary: 'Analyst with several years in operations and software projects. Known for turning unclear requests into clear requirements and for keeping delivery on a planned date. Looking to bring that approach to the ' + role + ' role at ' + co + '.',
+      bullets: [
+        'Cut a weekly reporting task from 6 hours to 1 hour by automating it in a spreadsheet, which a second team then reused.',
+        'Wrote requirements, user stories and test plans in Jira for a product release that went live on the planned date.',
+        'Led a three-month pilot across three teams and presented the results, which helped leadership decide where to invest next.'
+      ],
+      cover: 'Dear hiring team at ' + co + ',\n\nI am applying for the ' + role + ' position. The posting describes work I have done before: turning needs into clear requirements and keeping stakeholders aligned until delivery.\n\nIn my recent roles I defined requirements, tested releases and automated manual reporting. I would like to bring the same structure to ' + co + '.\n\nThank you for your time. I would be glad to talk.\n\nSample Candidate',
+      notes: [
+        'Problem this role solves: ' + j.desc.slice(0, 120) + (j.desc.length > 120 ? '…' : ''),
+        'Questions to ask: how are requirements captured today, and who signs off a release?',
+        'Next step: send a short LinkedIn message to the hiring manager.'
+      ]
+    };
+  }
+
+  function viewMat(rows) {
+    var list = jobsList(rows).filter(function (x) { return x.verdict === 'Will Apply'; });
+    if (!list.length) return '<div class="panel empty">No job has the verdict Will Apply yet. Rescue one from Trash, or lower the score needed.</div>';
+    if (!state.mat || !list.some(function (x) { return String(x.job.id) === String(state.mat); })) state.mat = list[0].job.id;
+    var cur = list.filter(function (x) { return String(x.job.id) === String(state.mat); })[0].job;
+    var m = materialsFor(cur.pasted ? { title: cur.title, company: cur.company, desc: cur.pasted } : cur);
+    var opts = list.map(function (x) { return '<option value="' + x.job.id + '"' + (String(x.job.id) === String(state.mat) ? ' selected' : '') + '>' + x.job.title + ' · ' + x.job.company + '</option>'; }).join('');
+    return '<div class="bar" style="margin-bottom:12px"><label for="matsel"><b>Job</b></label><select id="matsel">' + opts + '</select><span class="pill plain">Sample text, not written by Claude here</span></div>' +
+      '<div class="mat">' +
+      '<div class="panel"><h2>CV</h2><p class="note">Professional summary</p><p>' + m.summary + '</p><p class="note">Bullets, one per achievement</p><ul>' + m.bullets.map(function (b) { return '<li>' + b + '</li>'; }).join('') + '</ul></div>' +
+      '<div class="panel"><h2>Cover letter</h2><p style="white-space:pre-line">' + m.cover + '</p></div>' +
+      '<div class="panel"><h2>Notes for the interview</h2><ul>' + m.notes.map(function (n) { return '<li>' + n + '</li>'; }).join('') + '</ul></div>' +
+      '</div>';
+  }
+
+  function render() {
+    var rows = all();
+    renderFunnel(rows);
+    var v = document.getElementById('view');
+    v.innerHTML = state.tab === 'pipeline' ? viewPipeline(rows) : state.tab === 'jobs' ? viewJobs(rows) : state.tab === 'trash' ? viewTrash(rows) : viewMat(rows);
+    ['pipeline', 'jobs', 'trash', 'mat'].forEach(function (t) {
+      document.getElementById('tab-' + t).setAttribute('aria-selected', state.tab === t ? 'true' : 'false');
+    });
+  }
+
+  document.getElementById('r-us').addEventListener('change', function (e) { state.us = e.target.checked; render(); });
+  document.getElementById('r-50').addEventListener('change', function (e) { state.u50 = e.target.checked; render(); });
+  document.getElementById('r-en').addEventListener('change', function (e) { state.en = e.target.checked; render(); });
+  document.getElementById('r-th').addEventListener('input', function (e) {
+    state.th = Number(e.target.value);
+    document.getElementById('r-th-v').textContent = 'above ' + state.th;
+    render();
+  });
+  document.querySelector('nav.tabs').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-tab]'); if (!b) return;
+    state.tab = b.getAttribute('data-tab'); render();
+  });
+  document.getElementById('view').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-rescue]');
+    if (b) { state.rescued[b.getAttribute('data-rescue')] = true; render(); }
+  });
+  document.getElementById('view').addEventListener('change', function (e) {
+    if (e.target.id === 'matsel') { state.mat = e.target.value; render(); }
+  });
+  render();
+})();
+</script>
+</html>

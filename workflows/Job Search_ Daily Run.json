@@ -1,0 +1,380 @@
+{
+  "name": "Job Search: Daily Run",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "a5a97e81-656e-4fb7-9101-e2873388a532",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "YOUR_WORKFLOW_1_ID",
+          "mode": "id",
+          "cachedResultName": "Job Search: 1 Fetch Jobs"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        448,
+        0
+      ],
+      "id": "992a4339-c1b5-499d-adfa-12c83b79fd1e",
+      "name": "Run 1 Fetch Jobs",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "YOUR_WORKFLOW_7_ID",
+          "mode": "id",
+          "cachedResultName": "Job Search: 7 LinkedIn Alerts"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        656,
+        0
+      ],
+      "id": "313bcf8c-2a78-47bd-aa6a-da7bffc30244",
+      "name": "Run 7 LinkedIn Alerts",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "YOUR_WORKFLOW_2_ID",
+          "mode": "id",
+          "cachedResultName": "Job search: 2 Match Contacts"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        880,
+        0
+      ],
+      "id": "29717353-6413-41d1-b82d-ce72e0b5eba2",
+      "name": "Run 2 Match Contacts",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "YOUR_WORKFLOW_3_ID",
+          "mode": "id",
+          "cachedResultName": "Job Search: 3 Score Jobs"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        1088,
+        -16
+      ],
+      "id": "65303b91-1131-4486-9b37-d5c984f1dcb7",
+      "name": "Run 3 Score Jobs",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "YOUR_WORKFLOW_4_ID",
+          "mode": "id",
+          "cachedResultName": "Job Search: 4 Claude Verdict"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        1280,
+        -16
+      ],
+      "id": "e46a19ad-e376-4644-a200-453d12088e85",
+      "name": "Run 4 Claude Verdict",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "YOUR_WORKFLOW_6_ID",
+          "mode": "id",
+          "cachedResultName": "Job Search: 6 Outreach"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        1488,
+        -32
+      ],
+      "id": "250d371f-46ec-4280-9fa2-c63c60cb3a6a",
+      "name": "Run 6 Outreach",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "YOUR_WORKFLOW_5_ID",
+          "mode": "id",
+          "cachedResultName": "Job Search: 5 Application Materials"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        1664,
+        -32
+      ],
+      "id": "9d95d7f2-57a2-42a2-be60-8e596186767f",
+      "name": "Run 5 Application Materials",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "YOUR_WORKFLOW_8_ID",
+          "mode": "id",
+          "cachedResultName": "Job Search: 8 Morning Briefing"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        1856,
+        -48
+      ],
+      "id": "e53794a0-8889-4840-8aad-4408e3e7e07e",
+      "name": "Run 8 Morning Briefing",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        192,
+        -208
+      ],
+      "id": "3b80582a-f527-4584-a7bf-5f7eecb1c5a4",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Run 1 Fetch Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run 1 Fetch Jobs": {
+      "main": [
+        [
+          {
+            "node": "Run 7 LinkedIn Alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run 7 LinkedIn Alerts": {
+      "main": [
+        [
+          {
+            "node": "Run 2 Match Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run 2 Match Contacts": {
+      "main": [
+        [
+          {
+            "node": "Run 3 Score Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run 3 Score Jobs": {
+      "main": [
+        [
+          {
+            "node": "Run 4 Claude Verdict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run 4 Claude Verdict": {
+      "main": [
+        [
+          {
+            "node": "Run 6 Outreach",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run 6 Outreach": {
+      "main": [
+        [
+          {
+            "node": "Run 5 Application Materials",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run 5 Application Materials": {
+      "main": [
+        [
+          {
+            "node": "Run 8 Morning Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Run 1 Fetch Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}
