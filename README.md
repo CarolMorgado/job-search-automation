@@ -2,7 +2,7 @@
 
 Ten numbered n8n workflows, plus one master workflow that runs them every morning. They find jobs, filter and score them against a profile, track them in Notion, and prepare a tailored CV, cover letter and interview notes with Claude.
 
-**Live demo with invented data:** https://YOUR-USER.github.io/job-search-automation/
+**Live demo with invented data:** https://carolmorgado.github.io/job-search-automation/
 
 ## How it works
 1. **Find jobs:** TheirStack search and LinkedIn alert emails (Gmail).
